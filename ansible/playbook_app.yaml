@@ -1,0 +1,62 @@
+---
+- name: App server configuration
+  hosts: app_server
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Node.js and npm
+      apt:
+        name: 
+          - nodejs
+          - npm
+          - nginx
+        state: present
+
+    - name: Clone Node.js app repository
+      git:
+        repo: https://github.com/bezkoder/nodejs-express-mysql.git
+        dest: /srv/nodejs-app
+
+    - name: Sets Nginx conf file
+      template:
+        src: "db.config.js"
+        dest: "/srv/nodejs-app/app/config/db.config.js"
+
+    - name: Execute npm install
+      command: npm install
+      args:
+        chdir: /srv/nodejs-app
+
+    - name: Make sure Nginx service is running
+      systemd:
+        state: started
+        name: nginx
+        
+    - name: Sets Nginx conf file
+      template:
+        src: "nginx.conf.j2"
+        dest: "/etc/nginx/sites-available/app.conf"
+
+    - name: Enables new site
+      file:
+        src: "/etc/nginx/sites-available/app.conf"
+        dest: "/etc/nginx/sites-enabled/app.conf"
+        state: link
+
+    - name: Removes "default" site
+      file:
+        path: "/etc/nginx/sites-enabled/default"
+        state: absent
+        
+    - name: Restart Nginx
+      systemd:
+        name: nginx
+        state: restarted
+
+    - name: Run server on background
+      command: nohup node server.js &
+      args:
+        chdir: /srv/nodejs-app
